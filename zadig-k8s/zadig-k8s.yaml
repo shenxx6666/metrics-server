@@ -1,0 +1,129 @@
+apiVersion: apps/v1
+kind: Deployment         #后端服务类型选择Deployment
+metadata:
+  name: $T-Service$     #定义Deployment 资源名称
+spec:
+  replicas: "{{ .replicas_count }}"  #定义该服务的副本数
+  strategy:                   #可以不使用这个字段
+    type: RollingUpdate       #滚动更新策略 
+    rollingUpdate:
+      maxSurge: 25%           # 最大激增Pod数量比例（相对于期望副本数）
+      maxUnavailable: 25%     # 最大不可用Pod数量比例
+  selector:                   #用于告诉 Deployment 如何选择它所管理的 Pod 
+    matchLabels:
+      app: $T-Service$        #该标签与template下面的labels标签一致否则Deployment控制器无法关联到对应的pod
+  template:                  #由该 Deployment 创建的 每一个 Pod，为新创建的 Pod 打上标签
+    metadata:
+      labels:
+        app: $T-Service$
+    spec:                   
+      affinity:          #非必须字段
+        podAntiAffinity: #pod 软亲和性 尽量相同名称的pod调度到不同的节点上
+          preferredDuringSchedulingIgnoredDuringExecution:  #软亲和策略
+          - weight: 100   #权重
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app  #标签名 与上面 的标签一致
+                  operator: In
+                  values:   #标签值 与上面 的标签值一致
+                  - $T-Service$
+              topologyKey: kubernetes.io/hostname  #节点标识
+      # nodeSelector:    #节点标签选择器    指定调度到相应标签的节点
+      #   node-type: backend  
+      # tolerations:     #节点污点容忍  需要调度到有污点的节点上需要配置 
+      # - key: "dedicated"
+      #   operator: "Equal"
+      #   value: "backend"
+      #   effect: "NoSchedule"
+      containers:
+        - name: $T-Service$  #pod名称
+          image: "{{ .image }}"  #镜像地址
+          imagePullPolicy: IfNotPresent #镜像更新策略  Always 总是拉取 无论本地是否存在  IfNotPresent 本地存在该镜像就使用本地镜像否则就远程仓库拉取 Never 只使用本地镜像
+          command: ["node", "./node_modules/.bin/reolink", "run", "{{ .package }}", "{{.configname}}"] #node启动命令
+          ports:
+            - containerPort: "{{ .port }}"  #服务监听端口
+          env:       #对应的环境变量 相应的键值对
+            - name: REOLINK_DEPLOY_HOST_KEY    
+              value: "{{ .REOLINK_DEPLOY_HOST_KEY }}"
+            - name: REOLINK_DEPLOY_HOST_IP      
+              value: "{{ .REOLINK_DEPLOY_HOST_IP }}"
+            - name: REOLINK_DEPLOY_DC_NAME
+              value: "{{ .REOLINK_DEPLOY_DC_NAME }}"
+            - name: REOLINK_DEPLOY_HOST_PORT
+              value: "{{ .REOLINK_DEPLOY_HOST_PORT }}"
+          volumeMounts:  #pod挂载 名称与下面引入的挂载一致
+            - name: config-yml   #对应的配置文件
+              mountPath: /data/config.yml
+              subPath: config.yml
+            - name: templates-volume  #共享配置目录
+              mountPath: /opt/reolink/config
+          resources:  #资源限制
+            requests:
+              memory: "{{ .request_memory }}" 
+              cpu: "{{ .request_cpu}}"     
+            limits:
+              memory: "{{ .limit_memory }}"
+              cpu: "{{ .limit_cpu }}"     
+          livenessProbe:   #存活探针
+            tcpSocket:
+              port: "{{ .port }}"
+            initialDelaySeconds: 30    
+            periodSeconds: 15          
+            timeoutSeconds: 3          
+            failureThreshold: 3        
+            successThreshold: 1
+          readinessProbe:  #就绪探针
+            tcpSocket:
+              port: "{{ .port }}"
+            initialDelaySeconds: 20 
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+      imagePullSecrets:  #镜像拉取密钥 需要提前创建
+      - name: "{{ .imagePullSecret }}"
+      volumes:  #存储引用
+        - name: config-yml
+          configMap:
+            name: $T-Service$-config
+        - name: templates-volume
+          persistentVolumeClaim:
+            claimName: reolink-config-templates-pvc
+---
+#访问方式 
+apiVersion: v1
+kind: Service
+metadata:
+  name: $T-Service$  #集群内访问svc的名称
+spec:
+  selector:
+    app: $T-Service$
+  ports:
+    - name: http
+      port: "{{ .port }}"
+      targetPort: "{{ .port }}"
+      nodePort: "{{ .node_port }}" #集群外访问端口 
+  type: NodePort
+
+---
+#配置文件通过configmap挂载
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $T-Service$-config
+data:
+  config.json: |
+
+
+
+###1.变量是否有公用的，是否单独创建个公用的configmap
+###2.是否需要有放在nacos配置中心，服务连接nacos配置地址参数，
+###3.实例如何注册，注册中心是哪个
+###3.是否可以增加个ingress的暴露方式，通过拼接prefix+url，同个域名
+###4.健康检测是否可以改成httpget的方式
+###5.无service自己的标签
+###7.无需要secret的挂载需求吗
+###8.前后端的交互是怎么进行，有网关吗，访问前端通过网关来统一访问后端服务吗
+###9.pod容器优雅推出，不直接删除，防止在运行中的容器流量被弄断丢失
+
