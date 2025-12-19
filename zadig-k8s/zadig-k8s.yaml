@@ -3,7 +3,7 @@ kind: Deployment         #后端服务类型选择Deployment
 metadata:
   name: $T-Service$     #定义Deployment 资源名称
 spec:
-  replicas: "{{ .replicas_count }}"  #定义该服务的副本数
+  replicas: {{ .replicas_count }}  #定义该服务的副本数
   strategy:                   #可以不使用这个字段
     type: RollingUpdate       #滚动更新策略 
     rollingUpdate:
@@ -38,20 +38,20 @@ spec:
       #   effect: "NoSchedule"
       containers:
         - name: $T-Service$  #pod名称
-          image: "{{ .image }}"  #镜像地址
+          image: {{ .image }}  #镜像地址
           imagePullPolicy: IfNotPresent #镜像更新策略  Always 总是拉取 无论本地是否存在  IfNotPresent 本地存在该镜像就使用本地镜像否则就远程仓库拉取 Never 只使用本地镜像
-          command: ["node", "./node_modules/.bin/reolink", "run", "{{ .package }}", "{{.configname}}"] #node启动命令
+          command: ["node", "./node_modules/.bin/reolink", "run", {{ .package }}, {{.configname}}] #node启动命令
           ports:
-            - containerPort: "{{ .port }}"  #服务监听端口
+            - containerPort: {{ .port }}  #服务监听端口
           env:       #对应的环境变量 相应的键值对
             - name: REOLINK_DEPLOY_HOST_KEY    
-              value: "{{ .REOLINK_DEPLOY_HOST_KEY }}"
+              value: {{ .REOLINK_DEPLOY_HOST_KEY }}
             - name: REOLINK_DEPLOY_HOST_IP      
-              value: "{{ .REOLINK_DEPLOY_HOST_IP }}"
+              value: {{ .REOLINK_DEPLOY_HOST_IP }}
             - name: REOLINK_DEPLOY_DC_NAME
-              value: "{{ .REOLINK_DEPLOY_DC_NAME }}"
+              value: {{ .REOLINK_DEPLOY_DC_NAME }}
             - name: REOLINK_DEPLOY_HOST_PORT
-              value: "{{ .REOLINK_DEPLOY_HOST_PORT }}"
+              value: {{ .REOLINK_DEPLOY_HOST_PORT }}
           volumeMounts:  #pod挂载 名称与下面引入的挂载一致
             - name: config-yml   #对应的配置文件
               mountPath: /data/config.yml
@@ -60,14 +60,14 @@ spec:
               mountPath: /opt/reolink/config
           resources:  #资源限制
             requests:
-              memory: "{{ .request_memory }}" 
-              cpu: "{{ .request_cpu}}"     
+              memory: {{ .request_memory }} 
+              cpu: {{ .request_cpu}}     
             limits:
-              memory: "{{ .limit_memory }}"
-              cpu: "{{ .limit_cpu }}"     
+              memory: {{ .limit_memory }}
+              cpu: {{ .limit_cpu }}     
           livenessProbe:   #存活探针
             tcpSocket:
-              port: "{{ .port }}"
+              port: {{ .port }}
             initialDelaySeconds: 30    
             periodSeconds: 15          
             timeoutSeconds: 3          
@@ -75,14 +75,14 @@ spec:
             successThreshold: 1
           readinessProbe:  #就绪探针
             tcpSocket:
-              port: "{{ .port }}"
+              port: {{ .port }}
             initialDelaySeconds: 20 
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 3
             successThreshold: 1
       imagePullSecrets:  #镜像拉取密钥 需要提前创建
-      - name: "{{ .imagePullSecret }}"
+      - name: {{ .imagePullSecret }}
       volumes:  #存储引用
         - name: config-yml
           configMap:
@@ -101,9 +101,9 @@ spec:
     app: $T-Service$
   ports:
     - name: http
-      port: "{{ .port }}"
-      targetPort: "{{ .port }}"
-      nodePort: "{{ .node_port }}" #集群外访问端口 
+      port: {{ .port }}
+      targetPort: {{ .port }}
+      nodePort: {{ .node_port }} #集群外访问端口 
   type: NodePort
 
 ---
@@ -114,16 +114,3 @@ metadata:
   name: $T-Service$-config
 data:
   config.json: |
-
-
-
-###1.变量是否有公用的，是否单独创建个公用的configmap
-###2.是否需要有放在nacos配置中心，服务连接nacos配置地址参数，
-###3.实例如何注册，注册中心是哪个
-###3.是否可以增加个ingress的暴露方式，通过拼接prefix+url，同个域名
-###4.健康检测是否可以改成httpget的方式
-###5.无service自己的标签
-###7.无需要secret的挂载需求吗
-###8.前后端的交互是怎么进行，有网关吗，访问前端通过网关来统一访问后端服务吗
-###9.pod容器优雅推出，不直接删除，防止在运行中的容器流量被弄断丢失
-
